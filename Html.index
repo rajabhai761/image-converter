@@ -1,0 +1,232 @@
+// =================================================================
+//     SINGLE FILE IMAGE CONVERTER - PRIVACY FOCUSED UPDATE
+// =================================================================
+
+// 1. ZARURI PACKAGES IMPORT KARNA
+const express = require('express');
+const sharp = require('sharp');
+const multer =require('multer');
+const path = require('path');
+
+// 2. EXPRESS APP AUR MULTER SETUP
+const app = express();
+const port = 3000;
+// File ko memory mein rakhega, disk par nahi. Yeh privacy ke liye accha hai.
+const upload = multer({ storage: multer.memoryStorage() });
+
+// 3. FRONTEND CODE (HTML, CSS, JAVASCRIPT)
+const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy-First Image Converter</title>
+    <style>
+        /* General Styles */
+        body { font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background-color: #f0f2f5; color: #333; }
+        .container { background: #fff; padding: 2rem 3rem; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); text-align: center; width: 90%; max-width: 480px; }
+        h1 { color: #0d6efd; margin-bottom: 1rem; }
+        p.subtitle { margin-top: -10px; margin-bottom: 2rem; color: #6c757d; font-size: 0.9rem; }
+        
+        /* Form Styles */
+        form { display: flex; flex-direction: column; gap: 1.25rem; }
+        .file-input-wrapper { border: 2px dashed #0d6efd; padding: 2rem; border-radius: 8px; cursor: pointer; transition: background-color 0.2s; }
+        .file-input-wrapper:hover { background-color: #eef5ff; }
+        input[type="file"] { display: none; }
+        .file-label { font-weight: 500; color: #0d6efd; }
+        #fileName { margin-top: 10px; font-style: italic; color: #555; word-break: break-all; }
+        
+        /* Options & Button */
+        .options { text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+        select, button { padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 1rem; width: 100%; }
+        button { background-color: #0d6efd; color: white; border: none; cursor: pointer; font-weight: bold; transition: background-color 0.2s; }
+        button:disabled { background-color: #a5caff; cursor: not-allowed; }
+        button:hover:not(:disabled) { background-color: #0b5ed7; }
+        #status { margin-top: 1rem; font-weight: bold; min-height: 24px; transition: color 0.3s; }
+
+        /* Privacy Policy Modal */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 10px; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .privacy-link { color: #0d6efd; text-decoration: none; font-size: 0.8rem; cursor: pointer; }
+        .privacy-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Converter</h1>
+        <p class="subtitle">Your files are processed in memory and never saved on our server.</p>
+
+        <form id="uploadForm">
+            <div class="file-input-wrapper" onclick="document.getElementById('imageInput').click();">
+                <label for="imageInput" class="file-label">Choose or Drop Image Here</label>
+                <input type="file" id="imageInput" name="imageFile" accept="image/*" required>
+                <div id="fileName">No file selected</div>
+            </div>
+            
+            <div class="options">
+                <input type="checkbox" id="removeMetadata" name="removeMetadata" checked>
+                <label for="removeMetadata">Remove Private Data (EXIF)</label>
+            </div>
+            
+            <select id="formatSelect" name="format">
+                <option value="png">to PNG</option>
+                <option value="jpeg">to JPEG</option>
+                <option value="webp">to WEBP</option>
+                <option value="avif">to AVIF</option>
+                <option value="gif">to GIF</option>
+            </select>
+            
+            <button type="submit" id="submitBtn">Convert & Download</button>
+        </form>
+
+        <div id="status"></div>
+        <p><a class="privacy-link" id="privacyBtn">View Privacy Policy</a></p>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div id="privacyModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" id="closeModal">×</span>
+            <h2>Privacy Policy</h2>
+            <p>We respect your privacy. Here is how we handle your data:</p>
+            <ul>
+                <li><strong>No Storage:</strong> Your images are NEVER saved to our server's disk. They are processed entirely in memory (RAM).</li>
+                <li><strong>Temporary Processing:</strong> The image only exists in memory for the few seconds it takes to convert it. After conversion, it is immediately deleted.</li>
+                <li><strong>EXIF Data:</strong> We provide an option to remove all metadata (like GPS location, camera details) from your images for maximum privacy.</li>
+                <li><strong>No Logs:</strong> We do not log or track the content of your files.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const imageInput = document.getElementById('imageInput');
+        const formatSelect = document.getElementById('formatSelect');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusDiv = document.getElementById('status');
+        const fileNameDiv = document.getElementById('fileName');
+        const removeMetadataCheckbox = document.getElementById('removeMetadata');
+
+        imageInput.addEventListener('change', () => {
+            fileNameDiv.textContent = imageInput.files.length > 0 ? imageInput.files[0].name : 'No file selected';
+        });
+
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!imageInput.files[0]) {
+                statusDiv.textContent = 'Please select an image first.';
+                statusDiv.style.color = 'red';
+                return;
+            }
+
+            submitBtn.disabled = true;
+            statusDiv.textContent = 'Uploading & Converting...';
+            statusDiv.style.color = 'blue';
+
+            const formData = new FormData();
+            formData.append('imageFile', imageInput.files[0]);
+            formData.append('format', formatSelect.value);
+            formData.append('removeMetadata', removeMetadataCheckbox.checked);
+
+            try {
+                const response = await fetch('/convert', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Server error');
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                
+                const disposition = response.headers.get('Content-Disposition');
+                const filenameMatch = disposition && disposition.match(/filename="(.+?)"/);
+                a.download = filenameMatch ? filenameMatch[1] : 'converted-image.' + formatSelect.value;
+                
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                
+                statusDiv.textContent = 'Conversion successful! Download has started.';
+                statusDiv.style.color = 'green';
+
+            } catch (error) {
+                statusDiv.textContent = 'Error: ' + error.message;
+                statusDiv.style.color = 'red';
+            } finally {
+                submitBtn.disabled = false;
+                setTimeout(() => { statusDiv.textContent = ''; }, 5000);
+            }
+        });
+
+        // Modal Logic
+        const modal = document.getElementById('privacyModal');
+        const btn = document.getElementById('privacyBtn');
+        const span = document.getElementById('closeModal');
+        btn.onclick = () => { modal.style.display = "block"; }
+        span.onclick = () => { modal.style.display = "none"; }
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
+        }
+    </script>
+</body>
+</html>
+`;
+
+// 4. SERVER ROUTES (API ENDPOINTS)
+
+app.get('/', (req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(htmlContent);
+});
+
+app.post('/convert', upload.single('imageFile'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded.' });
+        }
+
+        const format = req.body.format;
+        // 'removeMetadata' form se string 'true' ya 'false' mein aayega
+        const removeMetadata = req.body.removeMetadata === 'true'; 
+
+        const originalName = path.parse(req.file.originalname).name;
+        const newFileName = \`\${originalName}.${format}\`;
+
+        // Sharp processing pipeline shuru karna
+        let imageProcessor = sharp(req.file.buffer);
+
+        // ** YEH HAI PRIVACY FEATURE **
+        // Agar user ne checkbox select kiya hai, to EXIF data hata do.
+        // .rotate() method EXIF orientation data ko use karke image ko arient karta hai
+        // aur is process mein baaki sabhi metadata hata deta hai.
+        if (removeMetadata) {
+            imageProcessor = imageProcessor.rotate();
+        }
+
+        // Final conversion karna
+        const outputBuffer = await imageProcessor
+            .toFormat(format)
+            .toBuffer();
+
+        res.setHeader('Content-Disposition', \`attachment; filename="\${newFileName}"\`);
+        res.setHeader('Content-Type', \`image/\${format}\`);
+        res.send(outputBuffer);
+
+    } catch (error) {
+        console.error('Conversion Error:', error);
+        res.status(500).json({ message: 'Failed to convert image. The file might be corrupted or unsupported.' });
+    }
+});
+
+// 5. SERVER KO START KARNA
+app.listen(port, () => {
+    console.log(\`Server is running on http://localhost:\${port}\`);
+});
